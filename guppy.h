@@ -245,6 +245,7 @@ typedef int4 gp_int4;
 #define gp_global_index_3d() (uint3)(get_global_id(0), get_global_id(1), get_global_id(2))
 
 #define gp_shared __local
+#define gp_shared_zero
 
 #define gp_for_tile()
 
@@ -253,6 +254,8 @@ typedef int4 gp_int4;
 
 #define gp_forceinline
 #define gp_noinline
+
+#define gp_atomic_add(ref, value) atomic_add(&(ref), (value))
 
 #elif defined(GP_CUDA_SOURCE) || defined(__CUDACC__)
 
@@ -300,6 +303,7 @@ struct gp_kernel_info
 #define gp_global_index_3d() gp_uint3(blockIdx.x*gp_tile_size_x+threadIdx.x, blockIdx.y*gp_tile_size_y+threadIdx.y, blockIdx.z*gp_tile_size_z+threadIdx.z)
 
 #define gp_shared __shared__
+#define gp_shared_zero = { }
 
 #define gp_for_tile()
 
@@ -452,13 +456,13 @@ struct buffer_base : ref_object
 	virtual bool be_init(const buffer_desc &desc, size_t size_bytes, be_init_info &info) = 0;
 	virtual bool be_read(void *data, size_t offset_bytes, size_t size_bytes) = 0;
 	virtual bool be_write(const void *data, size_t offset_bytes, size_t size_bytes) = 0;
-	virtual bool be_fill(size_t offset_bytes, size_t size_bytes, uint8_t value) = 0;
+	virtual bool be_fill(uint8_t value, size_t offset_bytes, size_t size_bytes) = 0;
 
 	buffer_base(device_base *device, const buffer_desc &desc);
 	virtual ~buffer_base() override;
 	bool read(void *data, size_t offset_bytes, size_t size_bytes);
 	bool write(const void *data, size_t offset_bytes, size_t size_bytes);
-	bool fill(size_t offset_bytes, size_t size_bytes, uint8_t value);
+	bool fill(uint8_t value, size_t offset_bytes, size_t size_bytes);
 };
 
 struct device_base : ref_object
@@ -691,16 +695,16 @@ struct buffer : untyped_buffer
 		return ptr->write(data, offset * sizeof(T), count * sizeof(T));
 	}
 
-	bool fill(size_t offset, size_t count, uint8_t value) const {
+	bool fill(uint8_t value, size_t offset, size_t count) const {
 		gp_assert(ptr);
 		if (!ptr) return false;
-		return ptr->fill(offset * sizeof(T), count * sizeof(T), value);
+		return ptr->fill(value, offset * sizeof(T), count * sizeof(T));
 	}
 
 	bool fill(uint8_t value) const {
 		gp_assert(ptr);
 		if (!ptr) return false;
-		return ptr->fill(0, ptr->size_bytes, value);
+		return ptr->fill(value, 0, ptr->size_bytes);
 	}
 
 	template <typename U>
@@ -954,6 +958,8 @@ const ::gp::kernel_info kernel_imp<Kernel, void(Args...)>::info = {
 
 }
 
+void gp_atomic_add(uint32_t &ref, uint32_t value);
+
 #define gp_tile_size_1d() gp_uint(gp_tile_size_x)
 #define gp_tile_size_2d() gp_uint2(gp_tile_size_x, gp_tile_size_y)
 #define gp_tile_size_3d() gp_uint3(gp_tile_size_x, gp_tile_size_y, gp_tile_size_y)
@@ -965,6 +971,7 @@ const ::gp::kernel_info kernel_imp<Kernel, void(Args...)>::info = {
 #define gp_global_index_3d() gp_uint3(gp_indices.tile_offset.x+gp_x, gp_indices.tile_offset.y+gp_y, gp_indices.tile_offset.z+gp_z)
 
 #define gp_shared
+#define gp_shared_zero = { }
 
 #define gp_global_dim1 const ::gp::global_dim1 & gp_restrict
 #define gp_global_dim2 const ::gp::global_dim2 & gp_restrict
@@ -1175,7 +1182,7 @@ struct bad_buffer : buffer_base
 	virtual bool be_init(const buffer_desc &desc, size_t size_bytes, be_init_info &info) override { fail_use("initialize"); return false; }
 	virtual bool be_read(void *data, size_t offset_bytes, size_t size_bytes) override { fail_use("read from"); return false; }
 	virtual bool be_write(const void *data, size_t offset_bytes, size_t size_bytes) override { fail_use("write to"); return false; }
-	virtual bool be_fill(size_t offset_bytes, size_t size_bytes, uint8_t value) override { fail_use("fill"); return false; }
+	virtual bool be_fill(uint8_t value, size_t offset_bytes, size_t size_bytes) override { fail_use("fill"); return false; }
 };
 
 buffer_base *bad_device::be_create_buffer(const buffer_desc &desc)
@@ -1277,7 +1284,7 @@ bool buffer_base::write(const void *data, size_t offset_bytes, size_t size_bytes
 	return be_write(data, offset_bytes, size_bytes);
 }
 
-bool buffer_base::fill(size_t offset_bytes, size_t size_bytes, uint8_t value)
+bool buffer_base::fill(uint8_t value, size_t offset_bytes, size_t size_bytes)
 {
 	if (offset_bytes > this->size_bytes || size_bytes > this->size_bytes - offset_bytes) {
 		device->errorf("buffer fill(size=%zu, offset=%zu) out of bounds (buffer is %zu bytes)",
@@ -1285,7 +1292,7 @@ bool buffer_base::fill(size_t offset_bytes, size_t size_bytes, uint8_t value)
 		return false;
 	}
 
-	return be_fill(offset_bytes, size_bytes, value);
+	return be_fill(value, offset_bytes, size_bytes);
 }
 
 void device_base::errorf(const char *fmt, ...)
@@ -1434,13 +1441,13 @@ untyped_buffer device_base::create_buffer(const buffer_desc &desc)
 
 	// Copy the initial data to the front of the buffer if the backend didn't already
 	if (desc.initial_data_bytes > 0 && !init_info.initial_copied) {
-		if (!base->be_write(desc.initial_data, desc.initial_data_bytes, 0)) return create_bad_buffer(desc);
+		if (!base->be_write(desc.initial_data, 0, desc.initial_data_bytes)) return create_bad_buffer(desc);
 	}
 
 	// Zero the rest of the buffer if neccessary and the backend didn't already
 	size_t to_zero = desc.size_bytes - desc.initial_data_bytes;
 	if (to_zero > 0 && !init_info.zeroed && !desc.uninitialized) {
-		if (!base->be_fill(desc.initial_data_bytes, to_zero, 0)) return create_bad_buffer(desc);
+		if (!base->be_fill(0, desc.initial_data_bytes, to_zero)) return create_bad_buffer(desc);
 	}
 
 	return buf;
@@ -1600,7 +1607,7 @@ struct cpu_buffer : buffer_base
 	virtual bool be_init(const buffer_desc &desc, size_t size_bytes, be_init_info &info) override;
 	virtual bool be_read(void *data, size_t offset_bytes, size_t size_bytes) override;
 	virtual bool be_write(const void *data, size_t offset_bytes, size_t size_bytes) override;
-	virtual bool be_fill(size_t offset_bytes, size_t size_bytes, uint8_t value) override;
+	virtual bool be_fill(uint8_t value, size_t offset_bytes, size_t size_bytes) override;
 
 	void *cpu_ptr() const { return (char*)this + buffer_base::cpu_data_offset; }
 };
@@ -1657,7 +1664,7 @@ bool cpu_buffer::be_write(const void *data, size_t offset_bytes, size_t size_byt
 	return true;
 }
 
-bool cpu_buffer::be_fill(size_t offset_bytes, size_t size_bytes, uint8_t value)
+bool cpu_buffer::be_fill(uint8_t value, size_t offset_bytes, size_t size_bytes)
 {
 	memset((char*)cpu_ptr() + offset_bytes, value, size_bytes);
 	return true;
@@ -1896,7 +1903,7 @@ struct opencl_buffer : buffer_base
 	virtual bool be_init(const buffer_desc &desc, size_t size_bytes, be_init_info &info) override;
 	virtual bool be_read(void *data, size_t offset_bytes, size_t size_bytes) override;
 	virtual bool be_write(const void *data, size_t offset_bytes, size_t size_bytes) override;
-	virtual bool be_fill(size_t offset_bytes, size_t size_bytes, uint8_t value) override;
+	virtual bool be_fill(uint8_t value, size_t offset_bytes, size_t size_bytes) override;
 };
 
 struct opencl_device : device_base
@@ -1977,7 +1984,7 @@ bool opencl_buffer::be_write(const void *data, size_t offset_bytes, size_t size_
 	return true;
 }
 
-bool opencl_buffer::be_fill(size_t offset_bytes, size_t size_bytes, uint8_t value)
+bool opencl_buffer::be_fill(uint8_t value, size_t offset_bytes, size_t size_bytes)
 {
 	opencl_device *dev = (opencl_device*)device;
 
@@ -2260,7 +2267,7 @@ struct cuda_buffer : buffer_base
 	virtual bool be_init(const buffer_desc &desc, size_t size_bytes, be_init_info &info) override;
 	virtual bool be_read(void *data, size_t offset_bytes, size_t size_bytes) override;
 	virtual bool be_write(const void *data, size_t offset_bytes, size_t size_bytes) override;
-	virtual bool be_fill(size_t offset_bytes, size_t size_bytes, uint8_t value) override;
+	virtual bool be_fill(uint8_t value, size_t offset_bytes, size_t size_bytes) override;
 };
 
 struct cuda_device : device_base
@@ -2349,7 +2356,7 @@ bool cuda_buffer::be_write(const void *data, size_t offset_bytes, size_t size_by
 	return true;
 }
 
-bool cuda_buffer::be_fill(size_t offset_bytes, size_t size_bytes, uint8_t value)
+bool cuda_buffer::be_fill(uint8_t value, size_t offset_bytes, size_t size_bytes)
 {
 	cuda_device *dev = (cuda_device*)device;
 	cuda_ctx cctx { device };
@@ -2593,6 +2600,11 @@ device create_device(const device_desc &desc)
 	return dev;
 }
 
+}
+
+void gp_atomic_add(uint32_t &ref, uint32_t value)
+{
+	((std::atomic_uint32_t&)ref).fetch_add(value, std::memory_order_relaxed);
 }
 
 #endif
