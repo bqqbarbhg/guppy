@@ -245,7 +245,6 @@ typedef int4 gp_int4;
 #define gp_global_index_3d() (uint3)(get_global_id(0), get_global_id(1), get_global_id(2))
 
 #define gp_shared __local
-#define gp_shared_zero
 
 #define gp_for_tile()
 
@@ -303,7 +302,6 @@ struct gp_kernel_info
 #define gp_global_index_3d() gp_uint3(blockIdx.x*gp_tile_size_x+threadIdx.x, blockIdx.y*gp_tile_size_y+threadIdx.y, blockIdx.z*gp_tile_size_z+threadIdx.z)
 
 #define gp_shared __shared__
-#define gp_shared_zero = { }
 
 #define gp_for_tile()
 
@@ -971,7 +969,6 @@ void gp_atomic_add(uint32_t &ref, uint32_t value);
 #define gp_global_index_3d() gp_uint3(gp_indices.tile_offset.x+gp_x, gp_indices.tile_offset.y+gp_y, gp_indices.tile_offset.z+gp_z)
 
 #define gp_shared
-#define gp_shared_zero = { }
 
 #define gp_global_dim1 const ::gp::global_dim1 & gp_restrict
 #define gp_global_dim2 const ::gp::global_dim2 & gp_restrict

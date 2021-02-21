@@ -7,7 +7,14 @@ gp_kernel(count_bytes, 256, 1, 1, gp_args(
 	gp_buffer(uint32_t) result,
 	gp_buffer(uint8_t) buffer))
 {
-	gp_shared uint32_t count[256] gp_shared_zero;
+	gp_shared uint32_t count[256];
+
+	gp_for_tile() {
+		uint32_t li = gp_local_index_1d();
+		count[li] = 0;
+	}
+
+	gp_tile_sync_shared();
 
 	gp_for_tile_in_bounds_1d(buffer_size) {
 		uint32_t gi = gp_global_index_1d();
