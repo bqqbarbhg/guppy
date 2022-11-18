@@ -8,6 +8,10 @@ from collections import namedtuple
 from itertools import chain
 import re
 import string
+import platform
+
+is_windows = platform.system() == "Windows"
+is_apple = platform.system() == "Darwin"
 
 opencl_cc_source = """
 #define _CRT_SECURE_NO_WARNINGS
@@ -17,7 +21,11 @@ opencl_cc_source = """
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <CL/cl.h>
+#if defined(__APPLE__)
+    #include <OpenCL/cl.h>
+#else
+    #include <CL/cl.h>
+#endif
 
 int main(int argc, char **argv)
 {
@@ -66,7 +74,7 @@ int main(int argc, char **argv)
 
 		for (dev = 0; dev < num_devs; dev++) {
 			ok = ok && (ctx = clCreateContext(props, 1, &devs[dev], NULL, NULL, NULL)) != NULL;
-			ok = ok && (prg = clCreateProgramWithSource(ctx, 1, &file_data, &file_len, NULL)) != NULL;
+			ok = ok && (prg = clCreateProgramWithSource(ctx, 1, (const char**)&file_data, &file_len, NULL)) != NULL;
 
 			if (ok) {
 				err = clBuildProgram(prg, 1, &devs[dev], "", NULL, NULL);
@@ -106,26 +114,22 @@ class GpccPreprocessor(pcpp.Preprocessor):
         self.define("__PCPP_ALWAYS_TRUE__ 1")
         self.compress = 0
 
+        if is_apple:
+            self.define("GP_APPLE 1")
+        else:
+            self.define("GP_APPLE 0")
+
         self.pragmas = []
 
         for d in defines:
             self.define(d[0] + " " + d[1])
 
-    def on_unknown_macro_in_defined_expr(self,tok):
-        return None  # Pass through as expanded as possible
-
-    def on_unknown_macro_in_expr(self,tok):
-        return None  # Pass through as expanded as possible
-
-    def on_directive_handle(self,directive,toks,ifpassthru,precedingtoks):
+    def on_directive_unknown(self,directive,toks,ifpassthru,precedingtoks):
         if directive.value == "pragma":
             pragma = tuple(t.value for t in toks if t.type != "CPP_WS")
             if pragma and pragma[0] == "gpcc":
                 self.pragmas.append(pragma[1:])
-        return super(GpccPreprocessor, self).on_directive_handle(directive,toks,ifpassthru,precedingtoks)
-
-    def on_directive_unknown(self,directive,toks,ifpassthru,precedingtoks):
-        return None
+        return super(GpccPreprocessor, self).on_directive_unknown(directive,toks,ifpassthru,precedingtoks)
 
 ichain = chain.from_iterable
 
@@ -169,7 +173,7 @@ def preprocess(src, dst, defines=[]):
     print(f"$ " + " ".join(args), file=sys.stderr)
     p = pcpp.CmdPreprocessor(args)
     if p.return_code != 0:
-        raise RuntimeError(f"pcpp failed with {exit_code}")
+        raise RuntimeError(f"pcpp failed with {p.return_code}")
 
 Output = namedtuple("Output", "src_path dst_path name module_type")
 
@@ -197,24 +201,38 @@ in_names = set()
 
 def setup_opencl_checker(exe_path):
     if not os.path.isfile(exe_path) or os.path.getmtime(exe_path) < os.path.getmtime(__file__):
-        print("-- Compiling opencl_cc.exe", file=sys.stderr)
+        print(f"-- Compiling {os.path.basename(exe_path)}", file=sys.stderr)
         source_path = os.path.join(tmp_path, "opencl_cc.c")
         with open(source_path, "w") as f:
             f.write(opencl_cc_source)
-        args = [source_path, "/nologo"]
-        args += ["/I", os.path.join(os.getenv("CUDA_PATH"), "include")]
-        args += ["/link"]
-        args += ["/LIBPATH:" + os.path.join(os.getenv("CUDA_PATH"), "lib", "x64")]
-        args += ["opencl.lib"]
-        args += ["/OUT:" + exe_path]
-        try:
-            run_exe("cl", args)
-        except:
-            return False
+
+        if is_windows:
+            args = [source_path, "/nologo"]
+            args += ["/I", os.path.join(os.getenv("CUDA_PATH"), "include")]
+            args += ["/link"]
+            args += ["/LIBPATH:" + os.path.join(os.getenv("CUDA_PATH"), "lib", "x64")]
+            args += ["opencl.lib"]
+            args += ["/OUT:" + exe_path]
+            try:
+                run_exe("cl", args)
+            except:
+                return False
+        else:
+            args = [source_path]
+            if is_apple:
+                args += ["-framework", "OpenCL"]
+            else:
+                args += ["-lOpenCL"]
+            args += ["-o", exe_path]
+            try:
+                run_exe("cc", args)
+            except:
+                return False
+
     return True
 
 def check_opencl(src_path):
-    exe_path = os.path.join(tmp_path, "opencl_cc.exe")
+    exe_path = os.path.join(tmp_path, "opencl_cc.exe" if is_windows else "opencl_cc")
     if setup_opencl_checker(exe_path):
         run_exe(exe_path, [src_path])
 
@@ -251,6 +269,30 @@ class File:
 
         unixify_file(out_path)
         check_opencl(out_path)
+
+        return out_path
+
+    def metal_source(self):
+        out_path = self.tmp_file(self.src_name + ".metal")
+        preprocess(self.src_path, out_path,
+            defines=["GP_METAL_SOURCE"],
+        )
+
+        unixify_file(out_path)
+
+        return out_path
+
+    def metal_binary(self):
+        air_path = self.tmp_file(self.src_name + ".air")
+        out_path = self.tmp_file(self.src_name + ".metallib")
+
+        args = ["-sdk", "macosx", "metal"]
+        args += ["-x", "metal", "-c", self.src_path, "-o", air_path]
+        run_exe("xcrun", args)
+
+        args = ["-sdk", "macosx", "metallib"]
+        args += [air_path, "-o", out_path]
+        run_exe("xcrun", args)
 
         return out_path
 
@@ -329,7 +371,7 @@ wrap_column = 100
 def format_output(outputs, out_base):
 
     result = bytearray()
-    byte_to_str = [fmt_byte(b).encode("utf-8") for b in range(256)]
+    byte_to_str = [f"0x{b:02x},".encode("utf-8") for b in range(256)]
 
     result.extend(b"// Generated by gpcc.py, do not modify!\n\n")
 
@@ -337,10 +379,10 @@ def format_output(outputs, out_base):
         with open(o.dst_path, "rb") as f:
             data = f.read()
         
-        result.extend(f"static const char gpcc_{o.name}_{o.module_type}[] =\n".encode("utf-8"))
+        result.extend(f"static const unsigned char gpcc_{o.name}_{o.module_type}[] = {{\n".encode("utf-8"))
 
-        lit_prefix = b"\""
-        lit_suffix = b"\"\n"
+        lit_prefix = b""
+        lit_suffix = b"\n"
         lit_sep = lit_suffix + lit_prefix
 
         prefix_len = len(lit_prefix)
@@ -359,20 +401,16 @@ def format_output(outputs, out_base):
             cs = byte_to_str[bt]
             cl = len(cs)
 
-            if line_len + cl >= wrap_len:
-                result.extend(lit_sep)
-                line_len = prefix_len
-
             result.extend(cs)
             line_len += cl
 
-            if bt == ord_n:
+            if line_len >= wrap_len:
                 result.extend(lit_sep)
                 line_len = prefix_len
 
             ix += 1
 
-        result.extend(b"\";\n\n")
+        result.extend(b"0x00\n};\n\n")
     
     result.extend(b"#if defined(__cplusplus) && defined(GP_INCLUDED)\n")
     result.extend(f"static constexpr size_t gpcc_num_{out_base} = {len(outputs)};\n".encode("utf-8"))

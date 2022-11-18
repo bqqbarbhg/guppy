@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="gp::buffer_view&lt;*&gt;">
+    <Expand>
+      <ArrayItems Condition="cpu_data &amp;&amp; ptr">
+        <Size>ptr->size_bytes / sizeof($T1)</Size>
+        <ValuePointer>cpu_data</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+  <Type Name="gp::shared_buffer_view&lt;*&gt;">
+    <Expand>
+      <ArrayItems Condition="cpu_data">
+        <Size>size / sizeof($T1)</Size>
+        <ValuePointer>cpu_data</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+</AutoVisualizer>
