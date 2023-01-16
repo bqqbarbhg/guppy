@@ -549,6 +549,8 @@ struct dispatch_desc;
 struct dispatch_opts;
 struct untyped_buffer;
 
+struct device_info;
+
 namespace imp {
 
 struct device_base;
@@ -674,6 +676,7 @@ struct device_base : ref_object
 	};
 
 	virtual const char *be_name() = 0;
+	virtual bool be_get_info(device_info &info) = 0;
 	virtual bool be_init(const device_desc &desc) = 0;
 	virtual bool be_add_module(const module_desc &desc) = 0;
 	virtual buffer_base *be_create_buffer(const buffer_desc &desc) = 0;
@@ -950,10 +953,27 @@ struct buffer : untyped_buffer
 	buffer_view<T> view() const;
 };
 
+struct device_info
+{
+	device_info() { device[0] = '\0'; }
+
+	bool valid = false;
+	const char *backend = "";
+	char device[256];
+};
+
 struct device : imp::ref<imp::device_base>
 {
 	bool valid() const {
 		return ptr && ptr->valid;
+	}
+
+	device_info info() const {
+		device_info info = { };
+		if (!ptr) return info;
+		info.backend = ptr->be_name();
+		info.valid = ptr->be_get_info(info);
+		return info;
 	}
 
 	template <typename T>
@@ -1368,11 +1388,22 @@ static gp_func gp_forceinline gp_float3 gp_float4_xyz(gp_float4 v) { return gp_f
 #include <stdlib.h>
 #include <stdarg.h>
 #include <vector>
+#include <string>
 #include <atomic>
 #include <mutex>
 
 #ifndef GP_NO_CPU
 	#include <thread>
+
+	#if !defined(GP_NO_CPUID)
+		#if defined(_MSC_VER) && defined(_M_X64)
+			#include <intrin.h>
+			#define GP_HAS_CPUID
+		#elif defined(__GNUC__) && defined(__x86_64__)
+			#include <cpuid.h>
+			#define GP_HAS_CPUID
+		#endif
+	#endif
 #endif
 
 #ifdef GP_USE_OPENCL
@@ -1523,6 +1554,7 @@ struct bad_device : device_base
 	bad_device() : device_base() { valid = false; }
 
 	virtual const char *be_name() override { return "bad"; }
+	virtual bool be_get_info(device_info&) override { fail_use("get info"); return false; }
 	virtual bool be_init(const device_desc &desc) override { fail_use("initialize"); return false; }
 	virtual bool be_add_module(const module_desc &desc) override { fail_use("add module to"); return false; }
 	virtual buffer_base *be_create_buffer(const buffer_desc &desc) override;
@@ -2064,6 +2096,7 @@ struct cpu_device : device_base
 
 	virtual ~cpu_device() override;
 	virtual const char *be_name() override;
+	virtual bool be_get_info(device_info &info) override;
 	virtual bool be_init(const device_desc &desc) override;
 	virtual bool be_add_module(const module_desc &desc) override;
 	virtual buffer_base *be_create_buffer(const buffer_desc &desc) override;
@@ -2128,6 +2161,24 @@ cpu_device::~cpu_device()
 const char *cpu_device::be_name()
 {
 	return "cpu";
+}
+
+bool cpu_device::be_get_info(device_info &info)
+{
+	#ifdef GP_HAS_CPUID
+	{
+		static_assert(sizeof(info.device) >= 3*16 + 1, "device size too small");
+		char *dst = info.device;
+		for (int i = 2; i <= 4; i++) {
+			__cpuid((int*)dst, 0x80000000 + i);
+			dst += 16;
+		}
+		while (dst > info.device && (uint8_t)dst[-1] <= (uint8_t)' ') dst--;
+		*dst = '\0';
+	}
+	#endif
+
+	return true;
 }
 
 bool cpu_device::be_init(const device_desc &desc)
@@ -2354,9 +2405,9 @@ double opencl_score_device(const device_desc &desc, cl_device_id did)
 {
 	double score = 0.0;
 
-	if (opencl_device_info(did, CL_DEVICE_AVAILABLE, cl_ulong(0)) < desc.shared_memory_size) return bad_score;
 	if (!opencl_device_info(did, CL_DEVICE_AVAILABLE, cl_bool(false))) return bad_score;
 	if (!opencl_device_info(did, CL_DEVICE_COMPILER_AVAILABLE, cl_bool(false))) return bad_score;
+	if (opencl_device_info(did, CL_DEVICE_LOCAL_MEM_SIZE, cl_ulong(0)) < desc.shared_memory_size) return bad_score;
 	score += at_most(1e6,
 		(double)opencl_device_info(did, CL_DEVICE_MAX_COMPUTE_UNITS, cl_uint(0)) *
 		(double)opencl_device_info(did, CL_DEVICE_MAX_CLOCK_FREQUENCY, cl_uint(0)));
@@ -2391,6 +2442,7 @@ struct opencl_device : device_base
 
 	virtual ~opencl_device() override;
 	virtual const char *be_name() override;
+	virtual bool be_get_info(device_info &info) override;
 	virtual bool be_init(const device_desc &desc) override;
 	virtual bool be_add_module(const module_desc &desc) override;
 	virtual buffer_base *be_create_buffer(const buffer_desc &desc) override;
@@ -2492,6 +2544,17 @@ opencl_device::~opencl_device()
 const char *opencl_device::be_name()
 {
 	return "opencl";
+}
+
+bool opencl_device::be_get_info(device_info &info)
+{
+	cl_int err;
+	err = clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(info.device), info.device, nullptr);
+	if (err != CL_SUCCESS) {
+		errorf("clGetDeviceInfo(CL_DEVICE_NAME) failed: %d", err);
+		return false;
+	}
+	return true;
 }
 
 bool opencl_device::be_init(const device_desc &desc)
@@ -2798,6 +2861,7 @@ struct cuda_buffer : buffer_base
 
 struct cuda_device : device_base
 {
+	int device_index = -1;
 	CUdevice device = -1;
 	CUcontext context = nullptr;
 	CUstream stream = nullptr;
@@ -2808,6 +2872,7 @@ struct cuda_device : device_base
 
 	virtual ~cuda_device() override;
 	virtual const char *be_name() override;
+	virtual bool be_get_info(device_info &info) override;
 	virtual bool be_init(const device_desc &desc) override;
 	virtual bool be_add_module(const module_desc &desc) override;
 	virtual buffer_base *be_create_buffer(const buffer_desc &desc) override;
@@ -2933,6 +2998,17 @@ cuda_device::~cuda_device()
 const char *cuda_device::be_name()
 {
 	return "cuda";
+}
+
+bool cuda_device::be_get_info(device_info &info)
+{
+	CUresult res;
+	res = cuDeviceGetName(info.device, (int)sizeof(info.device), device);
+	if (res != CUDA_SUCCESS) {
+		errorf("cuDeviceGetName() failed: %d", res);
+		return false;
+	}
+	return true;
 }
 
 bool cuda_device::be_init(const device_desc &desc)
@@ -3174,6 +3250,7 @@ struct metal_device : device_base
 
     virtual ~metal_device() override;
     virtual const char *be_name() override;
+	virtual bool be_get_info(device_info &info) override;
     virtual bool be_init(const device_desc &desc) override;
     virtual bool be_add_module(const module_desc &desc) override;
     virtual buffer_base *be_create_buffer(const buffer_desc &desc) override;
@@ -3346,6 +3423,13 @@ metal_device::~metal_device()
 const char *metal_device::be_name()
 {
     return "metal";
+}
+
+bool metal_device::be_get_info(device_info &info)
+{
+	const char *name = [[device name] UTF8String];
+	snprintf(info.device, sizeof(info.device), "%s", name);
+	return true;
 }
 
 bool metal_device::be_init(const device_desc &desc)
