@@ -207,8 +207,10 @@ def setup_opencl_checker(exe_path):
             f.write(opencl_cc_source)
 
         if is_windows:
+            obj_path = os.path.abspath(tmp_path).replace("\\", "\\\\")
             args = [source_path, "/nologo"]
             args += ["/I", os.path.join(os.getenv("CUDA_PATH"), "include")]
+            args += [f"/Fo{obj_path}\\opencl_cc.obj"]
             args += ["/link"]
             args += ["/LIBPATH:" + os.path.join(os.getenv("CUDA_PATH"), "lib", "x64")]
             args += ["opencl.lib"]
