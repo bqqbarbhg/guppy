@@ -415,7 +415,7 @@ def format_output(outputs, out_base):
         result.extend(b"0x00\n};\n\n")
     
     result.extend(b"#if defined(__cplusplus) && defined(GP_INCLUDED)\n")
-    result.extend(f"static constexpr size_t gpcc_num_{out_base} = {len(outputs)};\n".encode("utf-8"))
+    result.extend(f"static constexpr size_t gpcc_{out_base}_count = {len(outputs)};\n".encode("utf-8"))
     result.extend(f"static const ::gp::module_desc gpcc_{out_base}[] = {{\n".encode("utf-8"))
     for o in outputs:
         name = f"gpcc_{o.name}_{o.module_type}"
