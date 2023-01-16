@@ -1,0 +1,7 @@
+#if GP_APPLE
+    #pragma gpcc type metal_binary opencl_source
+#else
+    #pragma gpcc type cuda_binary opencl_source
+#endif
+
+#include "kernels.h"
