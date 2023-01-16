@@ -1,6 +1,14 @@
 #ifndef GP_INCLUDED
 #define GP_INCLUDED
 
+#if defined(__clang__)
+	#pragma clang diagnostic push
+	#pragma clang diagnostic ignored "-Wunused"
+#elif defined(__GNUC__)
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wunused"
+#endif
+
 #if defined(__CUDACC__)
 	#define gp_func __device__
 #else
@@ -495,7 +503,7 @@ typedef metal::atomic_uint gp_atomic_uint;
 #define gp_local_linear_index_2d() (threadIdx.y*gp_tile_size_x + threadIdx.x)
 #define gp_local_linear_index_3d() ((threadIdx.z*gp_tile_size_y + threadIdx.y)*gp_tile_size_x + threadIdx.x)
 
-#define gp_shared __shared__
+#define gp_shared threadgroup
 #define gp_global_constant static __device__
 
 #define gp_for_tile()
@@ -503,8 +511,8 @@ typedef metal::atomic_uint gp_atomic_uint;
 #define gp_once_per_tile_2d() if (gp_local_index.x == 0 && gp_local_index.y == 0)
 #define gp_once_per_tile_3d() if (gp_local_index.x == 0 && gp_local_index.y == 0 && gp_local_index.z == 0)
 
-#define gp_tile_sync_shared() threadgroup_barrier(mem_flags::mem_threadgroup)
-#define gp_tile_sync_full() threadgroup_barrier(mem_flags::mem_device)
+#define gp_tile_sync_shared() threadgroup_barrier(metal::mem_flags::mem_threadgroup)
+#define gp_tile_sync_full() threadgroup_barrier(metal::mem_flags::mem_device)
 
 #define gp_sin(a) metal::sin(a)
 #define gp_cos(a) metal::cos(a)
@@ -1378,6 +1386,13 @@ static gp_func gp_forceinline gp_float3 gp_float4_xyz(gp_float4 v) { return gp_f
 #define gp_for_local_linear_2d(p_type, p_name, p_bounds) for (p_type p_name = (p_type)gp_local_linear_index_2d(); p_name < p_bounds; p_name += (p_type)gp_local_linear_size_2d())
 #define gp_for_local_linear_3d(p_type, p_name, p_bounds) for (p_type p_name = (p_type)gp_local_linear_index_3d(); p_name < p_bounds; p_name += (p_type)gp_local_linear_size_3d())
 
+
+#if defined(__clang__)
+	#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+	#pragma GCC diagnostic pop
+#endif
+
 #endif
 
 #ifdef GP_IMPLEMENTATION
@@ -1398,11 +1413,35 @@ static gp_func gp_forceinline gp_float3 gp_float4_xyz(gp_float4 v) { return gp_f
 	#if !defined(GP_NO_CPUID)
 		#if defined(_MSC_VER) && defined(_M_X64)
 			#include <intrin.h>
-			#define GP_HAS_CPUID
-		#elif defined(__GNUC__) && defined(__x86_64__)
+			#define GP_HAS_X64_CPUID
+			static void gp_x64_cpuid(char *dst, int leaf) {
+				__cpuid((int*)dst, leaf);
+			}
+		#elif (defined(__GNUC__) || defined(__clang__)) && defined(__x86_64__)
 			#include <cpuid.h>
-			#define GP_HAS_CPUID
+			#define GP_HAS_X64_CPUID
+			static void gp_x64_cpuid(char *dst, int leaf) {
+				int eax, ebx, ecx, edx;
+				__cpuid(leaf, eax, ebx, ecx, edx);
+				memcpy(dst +  0, &eax, 4);
+				memcpy(dst +  4, &ebx, 4);
+				memcpy(dst +  8, &ecx, 4);
+				memcpy(dst + 12, &edx, 4);
+			}
 		#endif
+	#endif
+
+	#if defined(GP_HAS_X64_CPUID)
+		static char *gp_get_cpu_name(char *dst, size_t length) {
+			gp_assert(length >= 3*16 + 1);
+			for (int i = 2; i <= 4; i++) {
+				gp_x64_cpuid(dst, 0x80000000 + i);
+				dst += 16;
+			}
+			return dst;
+		}
+	#else
+		static void gp_get_cpu_name(char *dst, size_t length) { return dst; }
 	#endif
 #endif
 
@@ -2165,18 +2204,9 @@ const char *cpu_device::be_name()
 
 bool cpu_device::be_get_info(device_info &info)
 {
-	#ifdef GP_HAS_CPUID
-	{
-		static_assert(sizeof(info.device) >= 3*16 + 1, "device size too small");
-		char *dst = info.device;
-		for (int i = 2; i <= 4; i++) {
-			__cpuid((int*)dst, 0x80000000 + i);
-			dst += 16;
-		}
-		while (dst > info.device && (uint8_t)dst[-1] <= (uint8_t)' ') dst--;
-		*dst = '\0';
-	}
-	#endif
+	char *end = gp_get_cpu_name(info.device, sizeof(info.device));
+	while (end > info.device && (uint8_t)end[-1] <= (uint8_t)' ') end--;
+	*end = '\0';
 
 	return true;
 }
@@ -3398,6 +3428,10 @@ metal_locked_buffer metal_buffer::lock(size_t offset, size_t size, const void *d
 
 			lb.data = (char*)[staging contents] + (offset & 3);
 			lb.needs_flush = true;
+		} break;
+
+		default: {
+			gp_assert(0 && "Unhanded storage mode");
 		} break;
 
 	}
