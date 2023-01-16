@@ -1,7 +1,17 @@
-#if GP_APPLE
-    #pragma gpcc type metal_binary opencl_source
-#else
-    #pragma gpcc type cuda_binary opencl_source
+
+// Always compile (verify) OpenCL
+#pragma gpcc type opencl_source
+
+// Build OpenCL/Metal on demand
+// These can be requested via eg. `guppy_cc.py -D USE_CUDA`
+
+#if defined(USE_CUDA)
+    #pragma gpcc type cuda_binary
 #endif
 
+#if defined(USE_METAL)
+    #pragma gpcc type metal_binary
+#endif
+
+// Include the actual kernels to build
 #include "kernels.h"

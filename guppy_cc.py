@@ -145,8 +145,8 @@ parser.add_argument("-o", metavar="output", nargs="?",
 parser.add_argument("-t", metavar="type", action="append",
     help="module types to process, matches gp::module_type")
 
-parser.add_argument("-I", metavar="dir", action="append",
-    help="include directories")
+parser.add_argument("-D", metavar="define", action="append",
+    default=[], help="defines to pass to preprocessor")
 
 parser.add_argument("--temp-dir", default="gpcc_temp",
     help="temporary directory")
@@ -333,6 +333,14 @@ for f in files:
         ("GP_INCLUDED", "1"),
         ("GP_IMPLEMENTED", "1"),
     ]
+
+    for d in argv.D:
+        if "=" in d:
+            name, val = d.split("=", 1)
+            defines.append((name, val))
+        else:
+            defines.append((d, "1"))
+
     pp = GpccPreprocessor(defines)
     with open(f.src_path) as of:
         pp.parse(of)

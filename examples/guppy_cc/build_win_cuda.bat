@@ -14,7 +14,8 @@ mkdir build
 
 @rem Compile kernels.gpcc to build/kernels.gpcc.h
 @rem The file itself only declares the platforms and includes "kernels.h"
-python ..\..\guppy_cc.py kernels.gpcc -o build/kernels.gpcc.h --temp-dir build
+@rem We request CUDA support via USE_CUDA that is checked by an #if in kernels.gpcc
+python ..\..\guppy_cc.py -D USE_CUDA kernels.gpcc -o build/kernels.gpcc.h --temp-dir build
 
 @rem Compile options:
 @rem   /I "%CUDA_PATH%\include"  CUDA include path (includes OpenCL)

@@ -6,12 +6,16 @@ header with the kernels that can be included into the final executable.
 Supported platforms:
 
 - Windows
-  - CUDA + OpenCL
+  - OpenCL\*
+  - CUDA
 - Linux
   - OpenCL
   - CUDA
 - macOS
-  - Metal + OpenCL
+  - OpenCL
+  - Metal
+
+  *\* Currently only supported with CUDA as `guppy_cc.py` can't detect other toolkits*
 
 ## Setup
 
@@ -112,3 +116,7 @@ or the XML representation in the `.vcxproj`:
     <AdditionalInputs>$(ProjectDir)..\..\..\kernels.h</AdditionalInputs>
 </CustomBuild>
 ```
+
+### macOS (command line)
+
+See `build_mac_*.sh` for details how to build the example.
