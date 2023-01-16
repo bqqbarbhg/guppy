@@ -1,3 +1,19 @@
+# guppy_cc.py
+
+`guppy_cc.py` compiles/validates kernels to be used with Guppy. It produces a
+header with the kernels that can be included into the final executable.
+
+Supported platforms:
+
+- Windows
+  - CUDA + OpenCL
+- Linux
+  - OpenCL
+  - CUDA
+- macOS
+  - Metal + OpenCL
+
+## Setup
 
 Prereqiusites:
 
@@ -7,13 +23,15 @@ Prereqiusites:
 - CUDA/OpenCL on Linux
 - Xcode on macOS
 
-## guppy_cc.py
+## Usage
 
-`guppy_cc.py` compiles/validates kernels to be used with Guppy. It produces a
-header with the kernels that can be included into the final executable.
+Use `guppy_cc.py` from the command line as follows, you can omit `--temp`
+(defaults to `gpcc_temp`) and `-o` (defaults to adjacent `.gpcc.h` file).
 
-In the most minimal configuration you only need to call `guppy_cc.py kernels.gpcc`
-which will generate the resulting header `kernels.gpcc.h` next to the input file.
+```bash
+python3 guppy_cc.py my_kernels.gpcc --temp temp -o build/my_kernels.gpcc.h
+```
+
 You should declare platforms you want to compile using  `#pragma gpcc type`
 statement and include the kernel file(s) you want to compile.
 
@@ -34,6 +52,9 @@ You can include different options for different platforms using the preprocessor
 #include "kernels.h"
 ```
 
+Ideally you should hook `guppy_cc.py` to a pre-build step in your preferred
+build system.
+
 ### Using the generated header
 
 The generated `.gpcc.h` header has `static` arrays containing the compiled kernels
@@ -49,11 +70,45 @@ static const ::gp::module_desc gpcc_my_kernels[] = {
 };
 ```
 
+```cpp
+#include "guppy.h"
+#include "my_kernels.h
+#include "my_kernels.gpcc.h"
+
+int main(int argc, char **argv)
+{
+    gp::device_desc desc;
+    desc.modules = gpcc_my_kernels;
+    desc.num_modules = gpcc_my_kernels_count;
+
+    gp::device device = gp::create_device(desc);
+    device.dispatch(my_kernel(...));
+}
+```
+
 ## Building the example
 
 ### Windows (command line)
 
-You need to have a terminal with `cl.exe` available, either a developer command
-prompt or one with `vcvars64.bat` enabled.
+See `build_win_*.bat` for details how to build this example. If you want to run
+the `.bat` file make sure to have a command prompt with `cl.exe` in the path,
+either via the MSVC developer command prompt or by running the correct `vcvarsall.bat`.
 
-- CUDA: `build_win_cuda.bat`
+### Windows (Visual Studio)
+
+See `project/guppy_cc_vs2019/` for a Windows example. Unfortunately it requires
+CUDA to build it as Windows has no vendor-independent way of locating OpenCL.
+
+The project builds `kernels.gpcc` as a pre-build step, you can see the details
+from the GUI by opening the properties of `kernels.gpcc` in Solution Explorer
+or the XML representation in the `.vcxproj`:
+
+```xml
+<CustomBuild Include="..\..\..\kernels.gpcc">
+    <FileType>Document</FileType>
+    <Command>python $(ProjectDir)..\..\..\..\..\guppy_cc.py %(FullPath) --temp-dir $(IntermediateOutputPath)\gpcc -o $(ProjectDir)..\..\..\build\kernels.gpcc.h</Command>
+    <Message>guppy_cc.py</Message>
+    <Outputs>$(ProjectDir)..\..\..\build\kernels.gpcc.h</Outputs>
+    <AdditionalInputs>$(ProjectDir)..\..\..\kernels.h</AdditionalInputs>
+</CustomBuild>
+```
