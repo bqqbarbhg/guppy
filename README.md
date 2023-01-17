@@ -107,9 +107,11 @@ we can call them via their names using `gp::device::dispatch()`. The header
 might be included in multiple files but a single one must define `GP_KERNEL_IMPL`
 before including it to generate the CPU function bodies.
 
-```c
-// kernels.h
+### Simple example
 
+`kernels.h`
+
+```c
 #pragma once
 
 #include "guppy.h"
@@ -130,9 +132,9 @@ gp_kernel(sum_kernel, 256, 1, 1, gp_args(
 }
 ```
 
-```cpp
-// main.cpp
+`main.cpp` 
 
+```cpp
 #include <stdio.h>
 
 #define GP_IMPLEMENTATION
