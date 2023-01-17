@@ -97,7 +97,7 @@ gp_kernel(sum, 256, 1, 1,
 }
 ```
 
-See [kernel.md](docs/kernel.md) for further information about the kernel
+See [*docs/kernel.md*](docs/kernel.md) for further information about the kernel
 programming environment.
 
 ## Calling kernels
@@ -107,7 +107,9 @@ we can call them via their names using `gp::device::dispatch()`. The header
 might be included in multiple files but a single one must define `GP_KERNEL_IMPL`
 before including it to generate the CPU function bodies.
 
-### Simple example
+### Overview of a complete example
+
+See [*examples/simple/*](/examples/simple/) for more details and a walkthrough.
 
 `kernels.h`
 
