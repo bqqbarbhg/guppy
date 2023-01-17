@@ -1386,7 +1386,6 @@ static gp_func gp_forceinline gp_float3 gp_float4_xyz(gp_float4 v) { return gp_f
 #define gp_for_local_linear_2d(p_type, p_name, p_bounds) for (p_type p_name = (p_type)gp_local_linear_index_2d(); p_name < p_bounds; p_name += (p_type)gp_local_linear_size_2d())
 #define gp_for_local_linear_3d(p_type, p_name, p_bounds) for (p_type p_name = (p_type)gp_local_linear_index_3d(); p_name < p_bounds; p_name += (p_type)gp_local_linear_size_3d())
 
-
 #if defined(__clang__)
 	#pragma clang diagnostic pop
 #elif defined(__GNUC__)
