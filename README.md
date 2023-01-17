@@ -107,7 +107,28 @@ we can call them via their names using `gp::device::dispatch()`. The header
 might be included in multiple files but a single one must define `GP_KERNEL_IMPL`
 before including it to generate the CPU function bodies.
 
-### Overview of a complete example
+Kernels are dispatched in blocks (thread groups), you can dispatch `(nx,ny,nz)`
+blocks of a kernel using `gp::device::dispatch()`. For 1D/2D kernels you can
+drop the unused dimensions.
+
+```cpp
+device.dispatch(gp_uint3(x,y,z), my_kernel(arg1, arg2));
+```
+
+Often you have kernels which have an argument of type `gp_global_dimN`, using
+this you can omit the dispatch size entirely as it can be derived from the
+arguments.
+
+```cpp
+gp_kernel(my_kernel, 16,16,1, gp_args(
+    gp_global_dim2 extents, float value)) { ... }
+
+// This will dispatch 4x1 16x16 blocks (covering global indices 64x16, the
+// kernel must still check that they are in bounds of `extents`)
+device.dispatch(my_kernel(gp_uint2(60, 10), 5.0f));
+```
+
+## Overview of a complete example
 
 See [*examples/simple/*](/examples/simple/) for more details and a walkthrough.
 
