@@ -7,3 +7,7 @@ as an OpenCL kernel without any additional tooling.
 ## Compiling
 
 To compile the example you must compile `main.cpp` with OpenCL support.
+
+```bash
+clang++ main.cpp -lOpenCL -o example
+```
