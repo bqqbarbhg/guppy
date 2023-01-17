@@ -86,7 +86,7 @@ gp_kernel(sum, 256, 1, 1,
     }
 
     // Sum all the values in the input to the local accumulator
-    gp_for_tile_in_bounds_1d(data_size) {
+    gp_for_tile_in_bounds_1d(input_size) {
         gp_atomic_add(group_sum, data[gp_local_index_1d()]);
     }
 
