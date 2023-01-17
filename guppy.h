@@ -7,6 +7,7 @@
 #elif defined(__GNUC__)
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wunused"
+    #pragma GCC diagnostic ignored "-Wattributes"
 #endif
 
 #if defined(__CUDACC__)
@@ -618,8 +619,8 @@ public:
     explicit operator bool() { return ptr != nullptr; }
     bool operator!() { return ptr == nullptr; }
 
-    friend void gp::imp::imp_set(ref<T> &ref, T *ptr);
-    friend T *gp::imp::imp_get(const ref<T> &ref);
+    template <typename U> friend void gp::imp::imp_set(ref<U> &ref, U *ptr);
+    template <typename U> friend U *gp::imp::imp_get(const ref<U> &ref);
 };
 
 template <typename T>
@@ -1150,6 +1151,15 @@ template <typename T>
 struct arg_traits : bad_argument_type<T> {
 };
 
+// HACK: GCC/Clang do something wonky with matching restrict in template
+#if defined(__GNUC__) || defined(__clang__)
+	template <typename T> struct arg_traits<const T&> {
+		static const constexpr arg_info info = { arg_type::constant, arg_constant_flags<T>::flags, sizeof(T) };
+		static gp_forceinline arg_ptr to_arg(const T &gp_restrict t) { return { (uintptr_t)&t }; }
+		static gp_forceinline const T &gp_restrict from_arg(arg_ptr arg) { return *(const T*)arg.data[0]; }
+	};
+#endif
+
 template <typename T> struct arg_traits<const T&gp_restrict> {
     static const constexpr arg_info info = { arg_type::constant, arg_constant_flags<T>::flags, sizeof(T) };
     static gp_forceinline arg_ptr to_arg(const T &gp_restrict t) { return { (uintptr_t)&t }; }
@@ -1405,6 +1415,7 @@ static gp_func gp_forceinline gp_float3 gp_float4_xyz(gp_float4 v) { return gp_f
 #include <string>
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
 
 #ifndef GP_NO_CPU
     #include <thread>

@@ -40,7 +40,7 @@ gp_kernel(raytrace, 16, 16, 1, gp_args(
         ray.origin = gp_float3(0.0f, 0.0f, -40.0f);
         ray.direction = rt_normalize(gp_float3(
             ((float)pixel.x - (float)resolution.x / 2.0f) / (float)resolution.y,
-            ((float)pixel.y - (float)resolution.y / 2.0f) / (float)resolution.y, 1.0f));
+            ((float)pixel.y - (float)resolution.y / 2.0f) / -(float)resolution.y, 1.0f));
 
         Hit hit;
         hit.distance = 1000.0f;

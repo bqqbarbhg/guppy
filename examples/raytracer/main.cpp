@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "kernels.h"
 #include "bmp.h"
@@ -17,9 +18,8 @@
     #include "build/kernels.gpcc.h"
 #endif
 
-float random() { return (float)rand() / (float)RAND_MAX; }
-gp_float2 random2() { return gp_float2(random(), random()); }
-gp_float3 random3() { return gp_float3(random(), random(), random()); }
+float rng() { return (float)rand() / (float)RAND_MAX; }
+gp_float3 rng3() { return gp_float3(rng(), rng(), rng()); }
 
 int main(int argc, char **argv)
 {
@@ -35,9 +35,9 @@ int main(int argc, char **argv)
     std::vector<Sphere> sphere_data;
     for (uint32_t i = 0; i < 64; i++) {
         Sphere sphere;
-        sphere.position = (random3() * 2.0f - gp_float3(1.0f, 1.0f, 1.0f)) * gp_float3(30.0f, 20.0f, 15.0f);
-        sphere.radius = 1.0f + random() * 3.0f;
-        sphere.color = random3();
+        sphere.position = (rng3() * 2.0f - gp_float3(1.0f, 1.0f, 1.0f)) * gp_float3(30.0f, 20.0f, 15.0f);
+        sphere.radius = 1.0f + rng() * 3.0f;
+        sphere.color = rng3();
         sphere_data.push_back(sphere);
     }
 

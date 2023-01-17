@@ -1,6 +1,6 @@
 # Guppy
 
-Guppy is a single header library that aims to make GPGPU programming
+Guppy is a single header C++14 library that aims to make GPGPU programming
 approachable and allows you to debug kernels on CPU.
 
 Supported backends:
