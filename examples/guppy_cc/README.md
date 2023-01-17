@@ -76,7 +76,7 @@ static const ::gp::module_desc gpcc_my_kernels[] = {
 
 ```cpp
 #include "guppy.h"
-#include "my_kernels.h
+#include "my_kernels.h"
 #include "my_kernels.gpcc.h"
 
 int main(int argc, char **argv)
