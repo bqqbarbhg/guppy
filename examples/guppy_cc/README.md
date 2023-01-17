@@ -120,3 +120,8 @@ or the XML representation in the `.vcxproj`:
 ### macOS (command line)
 
 See `build_mac_*.sh` for details how to build the example.
+
+### Linux (command line)
+
+See `build_linux_*.sh` for details how to build the example.
+
