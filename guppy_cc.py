@@ -29,79 +29,79 @@ opencl_cc_source = """
 
 int main(int argc, char **argv)
 {
-	char *file_data = NULL, *err_data = NULL;
-	size_t file_len = 0, err_len = 0;
-	cl_int err = 0;
-	cl_uint num_pts, pt, num_devs, dev;
-	cl_platform_id *pts = NULL;
-	cl_device_id *devs = NULL;
-	cl_context ctx = NULL;
-	cl_program prg = NULL;
-	cl_context_properties props[4] = { CL_CONTEXT_PLATFORM };
-	int ok = 1;
-	int status = 0;
+    char *file_data = NULL, *err_data = NULL;
+    size_t file_len = 0, err_len = 0;
+    cl_int err = 0;
+    cl_uint num_pts, pt, num_devs, dev;
+    cl_platform_id *pts = NULL;
+    cl_device_id *devs = NULL;
+    cl_context ctx = NULL;
+    cl_program prg = NULL;
+    cl_context_properties props[4] = { CL_CONTEXT_PLATFORM };
+    int ok = 1;
+    int status = 0;
 
-	if (argc != 2) {
-		fprintf(stderr, "Usage: opencl_cc [file]\\n");
-		return 1;
-	}
+    if (argc != 2) {
+        fprintf(stderr, "Usage: opencl_cc [file]\\n");
+        return 1;
+    }
 
-	{
-		const char *filename = argv[1];
-		FILE *file = fopen(filename, "rb");
-		ok = ok && file != NULL;
-		ok = ok && !fseek(file, 0, SEEK_END);
-		file_len = ftell(file);
-		ok = ok && !fseek(file, 0, SEEK_SET);
-		ok = ok && (file_data = malloc(file_len)) != NULL;
-		ok = ok && (fread(file_data, 1, file_len, file) == file_len);
-		ok = ok && !fclose(file);
-		if (!ok) {
-			fprintf(stderr, "Failed to read input file: %s\\n", filename);
-			return 2;
-		}
-	}
+    {
+        const char *filename = argv[1];
+        FILE *file = fopen(filename, "rb");
+        ok = ok && file != NULL;
+        ok = ok && !fseek(file, 0, SEEK_END);
+        file_len = ftell(file);
+        ok = ok && !fseek(file, 0, SEEK_SET);
+        ok = ok && (file_data = malloc(file_len)) != NULL;
+        ok = ok && (fread(file_data, 1, file_len, file) == file_len);
+        ok = ok && !fclose(file);
+        if (!ok) {
+            fprintf(stderr, "Failed to read input file: %s\\n", filename);
+            return 2;
+        }
+    }
 
-	ok = ok && !clGetPlatformIDs(0, NULL, &num_pts);
-	ok = ok && (pts = calloc(num_pts, sizeof(cl_platform_id))) != NULL;
-	ok = ok && !clGetPlatformIDs(num_pts, pts, NULL);
+    ok = ok && !clGetPlatformIDs(0, NULL, &num_pts);
+    ok = ok && (pts = calloc(num_pts, sizeof(cl_platform_id))) != NULL;
+    ok = ok && !clGetPlatformIDs(num_pts, pts, NULL);
 
-	for (pt = 0; pt < num_pts; pt++) {
-		ok = ok && !clGetDeviceIDs(pts[pt], CL_DEVICE_TYPE_ALL, 0, NULL, &num_devs);
-		ok = ok && (devs = calloc(num_pts, sizeof(cl_device_id))) != NULL;
-		ok = ok && !clGetDeviceIDs(pts[pt], CL_DEVICE_TYPE_ALL, num_devs, devs, NULL);
-		props[1] = (cl_context_properties)pts[pt];
+    for (pt = 0; pt < num_pts; pt++) {
+        ok = ok && !clGetDeviceIDs(pts[pt], CL_DEVICE_TYPE_ALL, 0, NULL, &num_devs);
+        ok = ok && (devs = calloc(num_pts, sizeof(cl_device_id))) != NULL;
+        ok = ok && !clGetDeviceIDs(pts[pt], CL_DEVICE_TYPE_ALL, num_devs, devs, NULL);
+        props[1] = (cl_context_properties)pts[pt];
 
-		for (dev = 0; dev < num_devs; dev++) {
-			ok = ok && (ctx = clCreateContext(props, 1, &devs[dev], NULL, NULL, NULL)) != NULL;
-			ok = ok && (prg = clCreateProgramWithSource(ctx, 1, (const char**)&file_data, &file_len, NULL)) != NULL;
+        for (dev = 0; dev < num_devs; dev++) {
+            ok = ok && (ctx = clCreateContext(props, 1, &devs[dev], NULL, NULL, NULL)) != NULL;
+            ok = ok && (prg = clCreateProgramWithSource(ctx, 1, (const char**)&file_data, &file_len, NULL)) != NULL;
 
-			if (ok) {
-				err = clBuildProgram(prg, 1, &devs[dev], "", NULL, NULL);
-				if (err == CL_BUILD_PROGRAM_FAILURE) {
-					ok = ok && !clGetProgramBuildInfo(prg, devs[dev], CL_PROGRAM_BUILD_LOG, 0, NULL, &err_len);
-					ok = ok && (err_data = calloc(1, err_len + 1)) != NULL;
-					ok = ok && !clGetProgramBuildInfo(prg, devs[dev], CL_PROGRAM_BUILD_LOG, err_len, err_data, NULL);
-					if (ok) {
-						fprintf(stderr, "%s\\n", err_data);
-						status = 3;
-					}
-					if (err_data) { free(err_data); err_data = NULL; }
-				}
-			}
+            if (ok) {
+                err = clBuildProgram(prg, 1, &devs[dev], "", NULL, NULL);
+                if (err == CL_BUILD_PROGRAM_FAILURE) {
+                    ok = ok && !clGetProgramBuildInfo(prg, devs[dev], CL_PROGRAM_BUILD_LOG, 0, NULL, &err_len);
+                    ok = ok && (err_data = calloc(1, err_len + 1)) != NULL;
+                    ok = ok && !clGetProgramBuildInfo(prg, devs[dev], CL_PROGRAM_BUILD_LOG, err_len, err_data, NULL);
+                    if (ok) {
+                        fprintf(stderr, "%s\\n", err_data);
+                        status = 3;
+                    }
+                    if (err_data) { free(err_data); err_data = NULL; }
+                }
+            }
 
-			if (prg) { clReleaseProgram(prg); prg = NULL; }
-			if (ctx) { clReleaseContext(ctx); ctx = NULL; }
-		}
+            if (prg) { clReleaseProgram(prg); prg = NULL; }
+            if (ctx) { clReleaseContext(ctx); ctx = NULL; }
+        }
 
-		if (devs) { free(devs); devs = NULL; }
-	}
+        if (devs) { free(devs); devs = NULL; }
+    }
 
-	if (!ok) {
-		fprintf(stderr, "Warning: Could not compile due to OpenCL API errors\\n");
-	}
+    if (!ok) {
+        fprintf(stderr, "Warning: Could not compile due to OpenCL API errors\\n");
+    }
 
-	return status;
+    return status;
 }
 """
 
