@@ -19,7 +19,7 @@ Supported platforms:
 
 ## Setup
 
-Prereqiusites:
+Prerequisites:
 
 - Python 3.6 or newer
 - PyPi package `pcpp` (`pip3 install pcpp`)
