@@ -30,6 +30,8 @@ The amount of shared memory is quite limited, usually the maximum amount per ker
 Guppy allows requiring a minimum amount of shared memory using `gp::device_desc::shared_memory_size`, defaulting to 16kB,
 failing to initialize devices that don't meet the requirement.
 
+Shared memory is most often implemented as 32-bit words, so using types other than `uint32_t`, `int32_t`, `float`, or structs of such might cause issues on some platforms.
+
 ### Static shared memory
 
 Using statically allocated shared memory in kernels is easy, just mark any array with the `gp_shared` qualifier.
@@ -65,10 +67,9 @@ gp_for_tile() {
 ### Dynamic shared memory
 
 Shared memory can also be dynamically allocated at dispatch time, if the amount of shared memory is not know beforehand.
-This can also be used to adjust shared memory size depending on the device limits.
 
-To use dynamically sized shared memory buffers they need to be passed as arguments to the kernel.
-Due to syntax differences between compute languages the shared buffer must be further initialized via a macro.
+To use dynamically sized shared memory buffers, they need to be passed as arguments to the kernel as `gp_shared_buffer(T)` arguments.
+Due to syntax differences between compute languages, the shared buffer must be further initialized via the macro `gp_shared_buffer_init()`.
 
 ```cpp
 gp_kernel(my_kernel, 64, 1, 1, gp_args(
