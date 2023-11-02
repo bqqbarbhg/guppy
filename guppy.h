@@ -404,6 +404,13 @@ typedef uint32_t gp_atomic_uint;
 #define gp_global_index_2d() gp_uint2(blockIdx.x*gp_tile_size_x+threadIdx.x, blockIdx.y*gp_tile_size_y+threadIdx.y)
 #define gp_global_index_3d() gp_uint3(blockIdx.x*gp_tile_size_x+threadIdx.x, blockIdx.y*gp_tile_size_y+threadIdx.y, blockIdx.z*gp_tile_size_z+threadIdx.z)
 
+#define gp_local_linear_size_1d() (gp_tile_size_x)
+#define gp_local_linear_size_2d() (gp_tile_size_x * gp_tile_size_y)
+#define gp_local_linear_size_3d() (gp_tile_size_x * gp_tile_size_y * gp_tile_size_z)
+#define gp_local_linear_index_1d() (threadIdx.x)
+#define gp_local_linear_index_2d() (threadIdx.y*gp_tile_size_x + threadIdx.x)
+#define gp_local_linear_index_3d() ((threadIdx.z*gp_tile_size_y + threadIdx.y)*gp_tile_size_x + threadIdx.x)
+
 #define gp_shared __shared__
 #define gp_global_constant static __device__
 
@@ -500,9 +507,9 @@ typedef metal::atomic_uint gp_atomic_uint;
 #define gp_local_linear_size_1d() (gp_tile_size_x)
 #define gp_local_linear_size_2d() (gp_tile_size_x * gp_tile_size_y)
 #define gp_local_linear_size_3d() (gp_tile_size_x * gp_tile_size_y * gp_tile_size_z)
-#define gp_local_linear_index_1d() (threadIdx.x)
-#define gp_local_linear_index_2d() (threadIdx.y*gp_tile_size_x + threadIdx.x)
-#define gp_local_linear_index_3d() ((threadIdx.z*gp_tile_size_y + threadIdx.y)*gp_tile_size_x + threadIdx.x)
+#define gp_local_linear_index_1d() (gp_local_index.x)
+#define gp_local_linear_index_2d() (gp_local_index.y*gp_tile_size_x + gp_local_index.x)
+#define gp_local_linear_index_3d() ((gp_local_index.z*gp_tile_size_y + gp_local_index.y)*gp_tile_size_x + gp_local_index.x)
 
 #define gp_shared threadgroup
 #define gp_global_constant static __device__
@@ -1306,9 +1313,9 @@ static gp_forceinline uint32_t gp_atomic_xchg_shared(uint32_t &ref, uint32_t val
 #define gp_tile_size_1d() gp_uint(gp_tile_size_x)
 #define gp_tile_size_2d() gp_uint2(gp_tile_size_x, gp_tile_size_y)
 #define gp_tile_size_3d() gp_uint3(gp_tile_size_x, gp_tile_size_y, gp_tile_size_y)
-#define gp_tile_index_1d() (gp_indices.tile_offset.x)
-#define gp_tile_index_2d() gp_uint2(gp_indices.tile_offset.x, gp_indices.tile_offset.y)
-#define gp_tile_index_3d() gp_uint3(gp_indices.tile_offset.x, gp_indices.tile_offset.y, gp_indices.tile_offset.z)
+#define gp_tile_index_1d() (gp_indices.tile_index.x)
+#define gp_tile_index_2d() gp_uint2(gp_indices.tile_index.x, gp_indices.tile_index.y)
+#define gp_tile_index_3d() gp_uint3(gp_indices.tile_index.x, gp_indices.tile_index.y, gp_indices.tile_index.z)
 #define gp_local_index_1d() (gp_x)
 #define gp_local_index_2d() gp_uint2(gp_x, gp_y)
 #define gp_local_index_3d() gp_uint3(gp_x, gp_y, gp_z)
@@ -1996,16 +2003,18 @@ bool device_base::dispatch(const gp_uint3 &num_tiles, const dispatch_desc &desc,
 
             uint32_t aligned_size = ((uint32_t)arg.data[0] + (align - 1)) & ~(align - 1);
             copy.args[i].data[0] = aligned_size;
-            copy.args[i].data[0] = shared_size;
+            copy.args[i].data[1] = shared_size;
 
             if (UINT32_MAX - aligned_size < shared_size) {
                 errorf("%s: Shared memory size overflows uint32", desc.kernel->name);
+				return false;
             }
 
             shared_size += aligned_size;
 
         } else {
             errorf("%s: Unknown argument type at %zu: %u", desc.kernel->name, i, (uint32_t)info.type);
+            return false;
         }
     }
 
@@ -2041,7 +2050,7 @@ bool device_base::dispatch(const gp_uint3 &num_tiles, const dispatch_desc &desc,
         if (opts_copy.debug_extent.y > max_debug_extent.y) opts_copy.debug_extent.y = max_debug_extent.y;
         if (opts_copy.debug_extent.z > max_debug_extent.z) opts_copy.debug_extent.z = max_debug_extent.z;
 
-        if (!be_dispatch(num_tiles, be_info, desc, opts_copy)) return false;
+        if (!be_dispatch(num_tiles, be_info, copy, opts_copy)) return false;
     }
 
     return true;
@@ -3194,7 +3203,8 @@ bool cuda_device::be_dispatch(const gp_uint3 &num_tiles, const be_dispatch_info 
 
         case arg_type::shared_buffer: {
             uint32_t offset = (uint32_t)arg.data[1];
-            arg_unions[i].shared_offset = offset;
+            gp_assert(offset % 4 == 0);
+            arg_unions[i].shared_offset = offset / 4;
             params[i] = &arg_unions[i].shared_offset;
         } break;
 
