@@ -18,16 +18,16 @@
 //
 gp_kernel(count_bytes, 256, 1, 1, gp_args(
 	gp_global_dim1 buffer_size,
-	gp_buffer(uint32_t) result,
+	gp_buffer(gp_atomic_uint) result,
 	gp_buffer(const uint8_t) buffer))
 {
 	// Statically allocate a shared memory buffer, this buffer is shared for one tile/group
-	gp_shared uint32_t count[256];
+	gp_shared gp_atomic_uint count[256];
 
 	// Shared buffers always start in an indeterminate state, so clear the buffer
 	gp_for_tile() {
 		uint32_t li = gp_local_index_1d();
-		count[li] = 0;
+		gp_atomic_store(count[li], 0);
 	}
 
 	// -- Synchronize for all threads in the tile and shared memory --
@@ -46,8 +46,9 @@ gp_kernel(count_bytes, 256, 1, 1, gp_args(
 	// Add the shared counter results to the global result counters
 	gp_for_tile() {
 		uint32_t li = gp_local_index_1d();
-		if (count[li] != 0) {
-			gp_atomic_add(result[li], count[li]);
+		uint32_t n = gp_atomic_load(count[li]);
+		if (n != 0) {
+			gp_atomic_add(result[li], n);
 		}
 	}
 }
@@ -75,11 +76,11 @@ gp_kernel(count_bytes, 256, 1, 1, gp_args(
 //
 gp_kernel(count_byte_batches, 256, 1, 1, gp_args(
 	gp_global_dim1 buffer_size,
-	gp_buffer(uint32_t) result,
+	gp_buffer(gp_atomic_uint) result,
 	gp_buffer(const uint8_t) buffer,
 	gp_const(uint32_t) batch_size,
 	gp_shared_buffer(uint32_t) shared_cache,
-	gp_shared_buffer(uint32_t) shared_count))
+	gp_shared_buffer(gp_atomic_uint) shared_count))
 {
 	const uint32_t cache_size = 256 + batch_size;
 	const uint32_t count_size = 256 * batch_size;
@@ -88,7 +89,7 @@ gp_kernel(count_byte_batches, 256, 1, 1, gp_args(
 	//   shared uint32_t cache[cache_size] = &shared_cache
 	//   shared uint32_t count[count_size] = &shared_count
 	gp_shared_buffer_init(uint32_t, cache, shared_cache);
-	gp_shared_buffer_init(uint32_t, count, shared_count);
+	gp_shared_buffer_init(gp_atomic_uint, count, shared_count);
 
 	// Initialize the shared memory buffers
 	gp_for_tile() {
@@ -100,7 +101,7 @@ gp_kernel(count_byte_batches, 256, 1, 1, gp_args(
 
 		// Clear shared `count`
 		gp_for_local_linear_1d(uint32_t, i, count_size) {
-			count[i] = 0;
+			gp_atomic_store(count[i], 0);
 		}
 	}
 
@@ -123,8 +124,9 @@ gp_kernel(count_byte_batches, 256, 1, 1, gp_args(
 	// Add the shared counter results to the global result counters
 	gp_for_tile() {
 		gp_for_local_linear_1d(uint32_t, i, count_size) {
-			if (count[i] != 0) {
-				gp_atomic_add(result[i], count[i]);
+			uint32_t n = gp_atomic_load(count[i]);
+			if (n != 0) {
+				gp_atomic_add(result[i], n);
 			}
 		}
 	}

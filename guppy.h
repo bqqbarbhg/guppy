@@ -504,12 +504,12 @@ typedef metal::atomic_uint gp_atomic_uint;
 #define gp_global_index_2d() (gp_tile_index.xy*gp_tile_size.xy + gp_local_index.xy)
 #define gp_global_index_3d() (gp_tile_index*gp_tile_size + gp_local_index)
 
-#define gp_local_linear_size_1d() (gp_tile_size_x)
-#define gp_local_linear_size_2d() (gp_tile_size_x * gp_tile_size_y)
-#define gp_local_linear_size_3d() (gp_tile_size_x * gp_tile_size_y * gp_tile_size_z)
+#define gp_local_linear_size_1d() (gp_tile_size.x)
+#define gp_local_linear_size_2d() (gp_tile_size.x * gp_tile_size.y)
+#define gp_local_linear_size_3d() (gp_tile_size.x * gp_tile_size.y * gp_tile_size.z)
 #define gp_local_linear_index_1d() (gp_local_index.x)
-#define gp_local_linear_index_2d() (gp_local_index.y*gp_tile_size_x + gp_local_index.x)
-#define gp_local_linear_index_3d() ((gp_local_index.z*gp_tile_size_y + gp_local_index.y)*gp_tile_size_x + gp_local_index.x)
+#define gp_local_linear_index_2d() (gp_local_index.y*gp_tile_size.x + gp_local_index.x)
+#define gp_local_linear_index_3d() ((gp_local_index.z*gp_tile_size.y + gp_local_index.y)*gp_tile_size.x + gp_local_index.x)
 
 #define gp_shared threadgroup
 #define gp_global_constant static __device__
@@ -1158,16 +1158,7 @@ template <typename T>
 struct arg_traits : bad_argument_type<T> {
 };
 
-// HACK: GCC/Clang do something wonky with matching restrict in template
-#if defined(__GNUC__) || defined(__clang__)
-	template <typename T> struct arg_traits<const T&> {
-		static const constexpr arg_info info = { arg_type::constant, arg_constant_flags<T>::flags, sizeof(T) };
-		static gp_forceinline arg_ptr to_arg(const T &gp_restrict t) { return { (uintptr_t)&t }; }
-		static gp_forceinline const T &gp_restrict from_arg(arg_ptr arg) { return *(const T*)arg.data[0]; }
-	};
-#endif
-
-template <typename T> struct arg_traits<const T&gp_restrict> {
+template <typename T> struct arg_traits<const T&> {
     static const constexpr arg_info info = { arg_type::constant, arg_constant_flags<T>::flags, sizeof(T) };
     static gp_forceinline arg_ptr to_arg(const T &gp_restrict t) { return { (uintptr_t)&t }; }
     static gp_forceinline const T &gp_restrict from_arg(arg_ptr arg) { return *(const T*)arg.data[0]; }

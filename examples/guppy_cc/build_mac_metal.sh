@@ -16,4 +16,5 @@ python3 ../../guppy_cc.py -D USE_METAL kernels.gpcc -o build/kernels.gpcc.h --te
 # it, in a larger project only a single file containing the `GP_IMPLEMENTATION`
 # has to be compiled as Objective C++.
 clang++ main.cpp -DGP_USE_METAL -std=c++14 -ObjC++ -o build/example \
-    -framework Foundation -framework OpenCL -framework Metal
+    -framework Foundation -framework OpenCL \
+    -framework Metal -framework CoreGraphics
