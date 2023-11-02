@@ -1185,7 +1185,8 @@ template <typename T> struct arg_traits<shared_buffer<T>> {
     static const constexpr arg_info info = { arg_type::shared_buffer, 0, sizeof(T) };
     static gp_forceinline arg_ptr to_arg(shared_buffer<T> t) { return { t.size, t.offset_or_align }; }
     static gp_forceinline shared_buffer<T> from_arg(arg_ptr arg) {
-        return (const shared_buffer<T>&)(shared_buffer_base((uint32_t)arg.data[0], (uint32_t)arg.data[1]));
+        const shared_buffer_base base((uint32_t)arg.data[0], (uint32_t)arg.data[1]);
+        return static_cast<const shared_buffer<T>&>(base);
     }
 };
 
