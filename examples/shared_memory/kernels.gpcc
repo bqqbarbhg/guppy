@@ -1,0 +1,16 @@
+
+#if defined(USE_OPENCL)
+    #pragma gpcc type opencl_source
+#endif
+
+#if defined(USE_CUDA)
+    #pragma gpcc type cuda_binary
+#endif
+
+#if defined(USE_METAL)
+    #pragma gpcc type metal_binary
+#endif
+
+// Include the actual kernels to build
+#include "kernels.h"
+
