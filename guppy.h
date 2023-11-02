@@ -20,18 +20,22 @@
 #define gp_forceinline __forceinline
 #define gp_noinline __declspec(noinline)
 #define gp_restrict __restrict
+#define gp_template_restrict __restrict
 #elif defined(__GNUC__)
 #define gp_forceinline __attribute__((always_inline))
 #define gp_noinline __attribute__((noinline))
 #define gp_restrict __restrict
+#define gp_template_restrict
 #elif defined(__NVCC__)
 #define gp_forceinline __forceinline__
 #define gp_noinline __noinline__
 #define gp_restrict __restrict__
+#define gp_template_restrict
 #else
 #define gp_forceinline
 #define gp_noinline
 #define gp_restrict
+#define gp_template_restrict
 #endif
 
 #if !(defined(GP_OPENCL_SOURCE) || defined(__OPENCL_VERSION__)) && !(defined(GP_METAL_SOURCE) || defined(__METAL_VERSION__))
@@ -1158,7 +1162,7 @@ template <typename T>
 struct arg_traits : bad_argument_type<T> {
 };
 
-template <typename T> struct arg_traits<const T&> {
+template <typename T> struct arg_traits<const T& gp_template_restrict> {
     static const constexpr arg_info info = { arg_type::constant, arg_constant_flags<T>::flags, sizeof(T) };
     static gp_forceinline arg_ptr to_arg(const T &gp_restrict t) { return { (uintptr_t)&t }; }
     static gp_forceinline const T &gp_restrict from_arg(arg_ptr arg) { return *(const T*)arg.data[0]; }
