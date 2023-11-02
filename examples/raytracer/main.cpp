@@ -10,7 +10,7 @@
 #include "bmp.h"
 
 // Use external kernels only if some GPU backend is enabled
-#if defined(GP_USE_OPENCL) || defined(GP_USE_OPENCL) || defined(GP_USE_METAL)
+#if defined(GP_USE_CUDA) || defined(GP_USE_OPENCL) || defined(GP_USE_METAL)
     #define USE_KERNELS
 #endif
 
