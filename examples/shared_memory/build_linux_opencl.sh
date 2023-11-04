@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-set -ex
+set -e
 
-# Build the example on macOS with OpenCL support.
+# Build the example on Linux with OpenCL support.
 
 # Create a build directory
 mkdir -p build
@@ -11,4 +11,4 @@ mkdir -p build
 python3 ../../guppy_cc.py -D USE_OPENCL kernels.gpcc -o build/kernels.gpcc.h --temp-dir build
 
 # Compile main.cpp to build/example
-clang++ main.cpp -DGP_USE_OPENCL -std=c++14 -framework OpenCL -o build/example
+clang++ main.cpp -DGP_USE_OPENCL -std=c++14 -pthread -lOpenCL -o build/example

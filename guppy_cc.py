@@ -305,7 +305,10 @@ class File:
         )
 
         unixify_file(out_path)
-        check_opencl(out_path)
+
+        no_check = os.getenv("GPCC_NO_OPENCL")
+        if not no_check and no_check != "0":
+            check_opencl(out_path)
 
         return out_path
 

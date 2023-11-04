@@ -284,8 +284,9 @@ typedef int4 gp_int4;
 #define gp_const(p_name) p_name
 #define gp_buffer(p_name) __global p_name* restrict
 #define gp_shared_buffer(p_type) __local p_type * restrict
-#define gp_global __global
-#define gp_shared __local
+#define gp_global_ptr __global
+#define gp_shared_ptr __local
+#define gp_thread_ptr
 
 #define gp_shared_buffer_init(p_type, p_name, p_buffer) __local p_type * restrict p_name = (__local p_type* restrict)(p_buffer)
 
@@ -390,8 +391,9 @@ typedef uint32_t gp_atomic_uint;
 #define gp_const(p_name) p_name
 #define gp_buffer(p_name) p_name* __restrict__
 #define gp_shared_buffer(p_type) uint32_t
-#define gp_global
-#define gp_shared
+#define gp_global_ptr
+#define gp_shared_ptr
+#define gp_thread_ptr
 
 #define gp_shared_buffer_init(p_type, p_name, p_buffer) \
     extern __shared__ int gp_shared_memory[]; \
@@ -493,8 +495,9 @@ typedef metal::atomic_uint gp_atomic_uint;
 #define gp_const(p_name) constant p_name&
 #define gp_buffer(p_name) device p_name* __restrict__
 #define gp_shared_buffer(p_type) threadgroup p_type*
-#define gp_global device
-#define gp_shared threadgroup
+#define gp_global_ptr device
+#define gp_shared_ptr threadgroup
+#define gp_thread_ptr thread
 
 #define gp_shared_buffer_init(p_type, p_name, p_buffer) \
     threadgroup p_type *p_name = p_buffer
@@ -1341,8 +1344,9 @@ static gp_forceinline uint32_t gp_atomic_xchg_shared(uint32_t &ref, uint32_t val
 #define gp_const(p_type) const p_type & gp_restrict
 #define gp_buffer(p_type) ::gp::buffer_view<p_type>
 #define gp_shared_buffer(p_type) ::gp::shared_buffer<p_type>
-#define gp_global
-#define gp_shared
+#define gp_global_ptr
+#define gp_shared_ptr
+#define gp_thread_ptr
 
 #define gp_shared_buffer_init(p_type, p_name, p_buffer) ::gp::shared_buffer_view<p_type> p_name { \
     (p_type*)((char*)gp_indices.shared_memory + (p_buffer).offset_or_align), (p_buffer).size }
