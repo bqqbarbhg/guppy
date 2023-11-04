@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+# Cancel any in-flight jobs for the same PR/branch so there's only one active
+# at a time
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  ci_ubuntu:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: Jimver/cuda-toolkit@v0.2.11
+        id: cuda-toolkit
+        with:
+          cuda: '12.1.0'
+          method: network
+          sub-packages: '["nvcc"]'
+          non-cuda-sub-packages: '[]'
+      - name: Install apt dependencies
+        run: sudo apt-get install -y ocl-icd-opencl-dev
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Install pip dependencies
+        run: pip3 install -r requirements.txt
+      - name: examples/guppy_cc OpenCL
+        working-directory: ./examples/guppy_cc
+        run: bash build_linux_opencl.sh
+      - name: examples/guppy_cc CUDA
+        working-directory: ./examples/guppy_cc
+        run: bash build_linux_cuda.sh
+
+  ci_macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Install pip dependencies
+        run: pip3 install -r requirements.txt
+      - name: examples/guppy_cc OpenCL
+        working-directory: ./examples/guppy_cc
+        run: bash build_mac_opencl.sh
+      - name: examples/guppy_cc Metal
+        working-directory: ./examples/guppy_cc
+        run: bash build_mac_metal.sh
+
+  ci_windows:
+    runs-on: windows-latest
+    steps:
+      - uses: Jimver/cuda-toolkit@v0.2.11
+        id: cuda-toolkit
+        with:
+          cuda: '12.1.0'
+          method: network
+          sub-packages: '["nvcc"]'
+          non-cuda-sub-packages: '[]'
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Install pip dependencies
+        run: pip install -r requirements.txt
+      - name: Add MSVC to PATH
+        run: echo "MSVC_PATH=C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build" >> $env:GITHUB_ENV
+      - name: examples/guppy_cc CUDA
+        working-directory: ./examples/guppy_cc
+        shell: cmd
+        run: |
+          call %MSVC_PATH%\vcvars64.bat
+          call build_win_cuda.bat

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -ex
 
 # Build the example on Linux with OpenCL and CUDA support.
 
@@ -11,4 +11,4 @@ mkdir -p build
 python3 ../../guppy_cc.py -D USE_CUDA kernels.gpcc -o build/kernels.gpcc.h --temp-dir build
 
 # Compile main.cpp to build/example
-clang++ main.cpp -DGP_USE_CUDA -std=c++14 -lOpenCL -lcuda -o build/example
+clang++ main.cpp -DGP_USE_CUDA -std=c++14 -pthread -lOpenCL -lcuda -o build/example
