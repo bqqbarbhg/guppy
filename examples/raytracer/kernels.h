@@ -16,7 +16,7 @@ typedef struct {
 } Hit;
 
 // Interesect against a sphere, updating the hit if necessary
-gp_func void intersect(Hit *hit, const Sphere *sphere, Ray ray) {
+gp_func void intersect(Hit *hit, const gp_global Sphere *sphere, Ray ray) {
     float t = intersect_sphere(ray, sphere->position, sphere->radius);
     if (t >= 0.0f && t < hit->distance) {
         gp_float3 position = ray.origin + ray.direction * t;
