@@ -22,8 +22,16 @@ jobs:
         with:
           cuda: '12.1.0'
           method: network
-          sub-packages: '["nvcc"]'
-          non-cuda-sub-packages: '[]'
+          sub-packages: '["nvcc", "toolkit"]'
+      - name: Search for CUDA
+        run: |
+          sudo ls /usr/local/cuda-*/lib64
+          sudo ls /usr/local/cuda-*/lib64/stubs || true
+          echo $CUDA_PATH
+      - name: Add CUDA to include/library path
+        run: |
+          echo "CPATH=$CPATH:/usr/local/cuda-12.1/include" >> $env:GITHUB_ENV
+          echo "LIBRARY_PATH=$LIBRARY_PATH:/usr/local/cuda-12.1/lib64/stubs" >> $env:GITHUB_ENV
       - name: Install apt dependencies
         run: sudo apt-get install -y ocl-icd-opencl-dev
       - uses: actions/checkout@v3
@@ -31,6 +39,18 @@ jobs:
           fetch-depth: 2
       - name: Install pip dependencies
         run: pip3 install -r requirements.txt
+      - name: examples/simple CPU
+        working-directory: ./examples/simple
+        run: |
+          bash build_linux_cpu.sh
+          build/example
+      - name: Check LIBRARY_PATH
+        run: |
+          echo CPATH: $CPATH
+          echo LIBRARY_PATH: $LIBRARY_PATH
+      - name: examples/opencl OpenCL
+        working-directory: ./examples/opencl
+        run: bash build_linux_opencl.sh
       - name: examples/guppy_cc OpenCL
         working-directory: ./examples/guppy_cc
         run: bash build_linux_opencl.sh
@@ -46,6 +66,23 @@ jobs:
           fetch-depth: 2
       - name: Install pip dependencies
         run: pip3 install -r requirements.txt
+      - name: examples/simple CPU
+        working-directory: ./examples/simple
+        run: |
+          bash build_mac_cpu.sh
+          build/example
+      - name: examples/opencl OpenCL
+        working-directory: ./examples/opencl
+        run: bash build_mac_opencl.sh
+      - name: examples/raytracer CPU
+        working-directory: ./examples/raytracer
+        run: bash build_mac_cpu.sh
+      - name: examples/raytracer OpenCL
+        working-directory: ./examples/raytracer
+        run: bash build_mac_opencl.sh
+      - name: examples/raytracer Metal
+        working-directory: ./examples/raytracer
+        run: bash build_mac_metal.sh
       - name: examples/guppy_cc OpenCL
         working-directory: ./examples/guppy_cc
         run: bash build_mac_opencl.sh
@@ -54,15 +91,13 @@ jobs:
         run: bash build_mac_metal.sh
 
   ci_windows:
-    runs-on: windows-latest
+    runs-on: windows-2019
     steps:
       - uses: Jimver/cuda-toolkit@v0.2.11
         id: cuda-toolkit
         with:
           cuda: '12.1.0'
           method: network
-          sub-packages: '["nvcc"]'
-          non-cuda-sub-packages: '[]'
       - uses: actions/checkout@v3
         with:
           fetch-depth: 2
@@ -70,9 +105,22 @@ jobs:
         run: pip install -r requirements.txt
       - name: Add MSVC to PATH
         run: echo "MSVC_PATH=C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build" >> $env:GITHUB_ENV
+      - name: examples/simple CPU
+        working-directory: ./examples/simple
+        shell: cmd
+        run: |
+          call "%MSVC_PATH%\vcvarsall.bat" x64
+          call build_win_cpu.bat
+          build\example.exe
+      - name: examples/opencl CUDA
+        working-directory: ./examples/opencl
+        shell: cmd
+        run: |
+          call "%MSVC_PATH%\vcvarsall.bat" x64
+          call build_win_cuda.bat
       - name: examples/guppy_cc CUDA
         working-directory: ./examples/guppy_cc
         shell: cmd
         run: |
-          call %MSVC_PATH%\vcvars64.bat
+          call "%MSVC_PATH%\vcvarsall.bat" x64
           call build_win_cuda.bat

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <assert.h>
 
 #define GP_IMPLEMENTATION
 #include "../../guppy.h"
@@ -24,6 +25,7 @@ int main(int argc, char **argv)
     for (uint32_t i = 0; i < N; i++) {
         Input input = input_values[i];
         printf("%d + %d = %d\n", input.a, input.b, result_values[i]);
+        assert(input.a + input.b == result_values[i]);
     }
 
     return 0;
