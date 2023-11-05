@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+# Cancel any in-flight jobs for the same PR/branch so there's only one active
+# at a time
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  ci_ubuntu:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: Jimver/cuda-toolkit@v0.2.11
+        id: cuda-toolkit
+        with:
+          cuda: '12.1.0'
+          method: network
+          sub-packages: '["nvcc", "toolkit"]'
+      - name: Add CUDA to include/library path
+        run: |
+          echo "CPATH=$CPATH:/usr/local/cuda-12.1/include" >> "$GITHUB_ENV"
+          echo "LIBRARY_PATH=$LIBRARY_PATH:/usr/local/cuda-12.1/lib64/stubs" >> "$GITHUB_ENV"
+      - name: Install apt dependencies
+        run: sudo apt-get install -y ocl-icd-opencl-dev
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Install pip dependencies
+        run: pip3 install -r requirements.txt
+      - name: examples/simple CPU
+        working-directory: ./examples/simple
+        run: bash build_linux_cpu.sh && build/example
+      - name: examples/opencl OpenCL
+        working-directory: ./examples/opencl
+        run: bash build_linux_opencl.sh
+      - name: examples/guppy_cc OpenCL
+        working-directory: ./examples/guppy_cc
+        run: bash build_linux_opencl.sh
+      - name: examples/guppy_cc CUDA
+        working-directory: ./examples/guppy_cc
+        run: bash build_linux_cuda.sh
+      - name: examples/raytracer CPU
+        working-directory: ./examples/raytracer
+        run: bash build_linux_cpu.sh && build/example
+      - name: examples/raytracer OpenCL
+        working-directory: ./examples/raytracer
+        run: bash build_linux_opencl.sh
+      - name: examples/raytracer CUDA
+        working-directory: ./examples/raytracer
+        run: bash build_linux_cuda.sh
+      - name: examples/shared_memory CPU
+        working-directory: ./examples/shared_memory
+        run: bash build_linux_cpu.sh && build/example
+      - name: examples/shared_memory OpenCL
+        working-directory: ./examples/shared_memory
+        run: bash build_linux_opencl.sh
+      - name: examples/shared_memory CUDA
+        working-directory: ./examples/shared_memory
+        run: bash build_linux_cuda.sh
+
+  ci_macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Install pip dependencies
+        run: pip3 install -r requirements.txt
+      - name: examples/simple CPU
+        working-directory: ./examples/simple
+        run: bash build_mac_cpu.sh && build/example
+      - name: examples/opencl OpenCL
+        working-directory: ./examples/opencl
+        run: bash build_mac_opencl.sh
+      - name: examples/guppy_cc OpenCL
+        working-directory: ./examples/guppy_cc
+        run: bash build_mac_opencl.sh
+      - name: examples/guppy_cc Metal
+        working-directory: ./examples/guppy_cc
+        run: bash build_mac_metal.sh && build/example
+      - name: examples/raytracer CPU
+        working-directory: ./examples/raytracer
+        run: bash build_mac_cpu.sh && build/example
+      - name: examples/raytracer OpenCL
+        working-directory: ./examples/raytracer
+        run: bash build_mac_opencl.sh
+      - name: examples/raytracer Metal
+        working-directory: ./examples/raytracer
+        run: bash build_mac_metal.sh && build/example
+      - name: examples/shared_memory CPU
+        working-directory: ./examples/shared_memory
+        run: bash build_mac_cpu.sh && build/example
+      - name: examples/shared_memory OpenCL
+        working-directory: ./examples/shared_memory
+        run: bash build_mac_opencl.sh
+      - name: examples/shared_memory Metal
+        working-directory: ./examples/shared_memory
+        run: bash build_mac_metal.sh && build/example
+
+  ci_windows:
+    runs-on: windows-2019
+    steps:
+      - uses: Jimver/cuda-toolkit@v0.2.11
+        id: cuda-toolkit
+        with:
+          cuda: '12.1.0'
+          method: network
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Install pip dependencies
+        run: pip install -r requirements.txt
+      - name: Add MSVC to PATH
+        run: echo "MSVC_PATH=C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build" >> $env:GITHUB_ENV
+      - name: Disable OpenCL checking
+        run: echo "GPCC_NO_OPENCL=1" >> $env:GITHUB_ENV
+      - name: examples/simple CPU
+        shell: cmd
+        working-directory: ./examples/simple
+        run: |
+          call "%MSVC_PATH%\vcvarsall.bat" x64
+          call build_win_cpu.bat
+          build\example.exe
+      - name: examples/opencl CUDA
+        shell: cmd
+        working-directory: ./examples/opencl
+        run: |
+          call "%MSVC_PATH%\vcvarsall.bat" x64
+          call build_win_cuda.bat
+      - name: examples/guppy_cc CUDA
+        shell: cmd
+        working-directory: ./examples/guppy_cc
+        run: |
+          call "%MSVC_PATH%\vcvarsall.bat" x64
+          call build_win_cuda.bat
+      - name: examples/raytracer CPU
+        shell: cmd
+        working-directory: ./examples/raytracer
+        run: |
+          call "%MSVC_PATH%\vcvarsall.bat" x64
+          call build_win_cpu.bat
+          build\example.exe
+      - name: examples/raytracer CUDA
+        shell: cmd
+        working-directory: ./examples/raytracer
+        run: |
+          call "%MSVC_PATH%\vcvarsall.bat" x64
+          call build_win_cuda.bat
+      - name: examples/shared_memory CPU
+        shell: cmd
+        working-directory: ./examples/shared_memory
+        run: |
+          call "%MSVC_PATH%\vcvarsall.bat" x64
+          call build_win_cpu.bat
+          build\example.exe
+      - name: examples/shared_memory CUDA
+        shell: cmd
+        working-directory: ./examples/shared_memory
+        run: |
+          call "%MSVC_PATH%\vcvarsall.bat" x64
+          call build_win_cuda.bat

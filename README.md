@@ -1,4 +1,4 @@
-# Guppy
+# Guppy [![CI](https://github.com/bqqbarbhg/guppy/actions/workflows/ci.yml/badge.svg)](https://github.com/bqqbarbhg/guppy/actions/workflows/ci.yml)
 
 Guppy is a single header C++14 library that aims to make GPGPU programming
 approachable and allows you to debug kernels on CPU.

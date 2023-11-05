@@ -29,6 +29,34 @@ opencl_cc_source = """
     #include <CL/cl.h>
 #endif
 
+#define TRY(expr) do { \\
+        if (ok) { \\
+            if (!(expr)) { \\
+                fprintf(stderr, "Internal error: '" #expr "' failed\\n"); \\
+                ok = 0; \\
+            } \\
+        } \\
+    } while(0)
+
+#define TRY_CL(expr) do { \\
+        if (ok) { \\
+            cl_int local_err = (expr); \\
+            if (local_err != 0) { \\
+                fprintf(stderr, "OpenCL error: '" #expr "' returned %d\\n", local_err); \\
+                ok = 0; \\
+            } \\
+        } \\
+    } while(0)
+
+#define TRY_CL_ERR(expr) do { \\
+        if (ok) { \\
+            if (!(expr) || err != 0) { \\
+                fprintf(stderr, "OpenCL error: '" #expr "' returned %d\\n", err); \\
+                ok = 0; \\
+            } \\
+        } \\
+    } while(0)
+
 int main(int argc, char **argv)
 {
     char *file_data = NULL, *err_data = NULL;
@@ -51,44 +79,47 @@ int main(int argc, char **argv)
     {
         const char *filename = argv[1];
         FILE *file = fopen(filename, "rb");
-        ok = ok && file != NULL;
-        ok = ok && !fseek(file, 0, SEEK_END);
+        TRY( file != NULL );
+        TRY( !fseek(file, 0, SEEK_END) );
         file_len = ftell(file);
-        ok = ok && !fseek(file, 0, SEEK_SET);
-        ok = ok && (file_data = malloc(file_len)) != NULL;
-        ok = ok && (fread(file_data, 1, file_len, file) == file_len);
-        ok = ok && !fclose(file);
+        TRY( !fseek(file, 0, SEEK_SET) );
+        TRY( (file_data = malloc(file_len)) != NULL );
+        TRY( fread(file_data, 1, file_len, file) == file_len );
+        TRY( !fclose(file) );
         if (!ok) {
             fprintf(stderr, "Failed to read input file: %s\\n", filename);
             return 2;
         }
     }
 
-    ok = ok && !clGetPlatformIDs(0, NULL, &num_pts);
-    ok = ok && (pts = calloc(num_pts, sizeof(cl_platform_id))) != NULL;
-    ok = ok && !clGetPlatformIDs(num_pts, pts, NULL);
+    TRY_CL( clGetPlatformIDs(0, NULL, &num_pts) );
+    TRY( (pts = calloc(num_pts, sizeof(cl_platform_id))) != NULL );
+    TRY_CL( clGetPlatformIDs(num_pts, pts, NULL) );
 
     for (pt = 0; pt < num_pts; pt++) {
-        ok = ok && !clGetDeviceIDs(pts[pt], CL_DEVICE_TYPE_ALL, 0, NULL, &num_devs);
-        ok = ok && (devs = calloc(num_pts, sizeof(cl_device_id))) != NULL;
-        ok = ok && !clGetDeviceIDs(pts[pt], CL_DEVICE_TYPE_ALL, num_devs, devs, NULL);
+        TRY_CL( clGetDeviceIDs(pts[pt], CL_DEVICE_TYPE_ALL, 0, NULL, &num_devs) );
+        TRY( (devs = calloc(num_pts, sizeof(cl_device_id))) != NULL );
+        TRY_CL( clGetDeviceIDs(pts[pt], CL_DEVICE_TYPE_ALL, num_devs, devs, NULL) );
         props[1] = (cl_context_properties)pts[pt];
 
         for (dev = 0; dev < num_devs; dev++) {
-            ok = ok && (ctx = clCreateContext(props, 1, &devs[dev], NULL, NULL, NULL)) != NULL;
-            ok = ok && (prg = clCreateProgramWithSource(ctx, 1, (const char**)&file_data, &file_len, NULL)) != NULL;
+            TRY_CL_ERR( (ctx = clCreateContext(props, 1, &devs[dev], NULL, NULL, &err)) != NULL );
+            TRY_CL_ERR( (prg = clCreateProgramWithSource(ctx, 1, (const char**)&file_data, &file_len, &err)) != NULL );
 
             if (ok) {
                 err = clBuildProgram(prg, 1, &devs[dev], "", NULL, NULL);
                 if (err == CL_BUILD_PROGRAM_FAILURE) {
-                    ok = ok && !clGetProgramBuildInfo(prg, devs[dev], CL_PROGRAM_BUILD_LOG, 0, NULL, &err_len);
-                    ok = ok && (err_data = calloc(1, err_len + 1)) != NULL;
-                    ok = ok && !clGetProgramBuildInfo(prg, devs[dev], CL_PROGRAM_BUILD_LOG, err_len, err_data, NULL);
+                    TRY_CL( clGetProgramBuildInfo(prg, devs[dev], CL_PROGRAM_BUILD_LOG, 0, NULL, &err_len) );
+                    TRY( (err_data = calloc(1, err_len + 1)) != NULL );
+                    TRY_CL( clGetProgramBuildInfo(prg, devs[dev], CL_PROGRAM_BUILD_LOG, err_len, err_data, NULL) );
                     if (ok) {
                         fprintf(stderr, "%s\\n", err_data);
                         status = 3;
                     }
                     if (err_data) { free(err_data); err_data = NULL; }
+                } else if (err != 0) { \\
+                    fprintf(stderr, "OpenCL error: 'clBuildProgram()' returned %d\\n", err);
+                    ok = 0;
                 }
             }
 
@@ -220,6 +251,7 @@ def setup_opencl_checker(exe_path):
             try:
                 run_exe("cl", args)
             except:
+                print("Warning: Failed to compile OpenCL checker", file=sys.stderr)
                 return False
         else:
             args = [source_path]
@@ -231,6 +263,7 @@ def setup_opencl_checker(exe_path):
             try:
                 run_exe("cc", args)
             except:
+                print("Warning: Failed to compile OpenCL checker", file=sys.stderr)
                 return False
 
     return True
@@ -272,7 +305,10 @@ class File:
         )
 
         unixify_file(out_path)
-        check_opencl(out_path)
+
+        no_check = os.getenv("GPCC_NO_OPENCL")
+        if not no_check and no_check != "0":
+            check_opencl(out_path)
 
         return out_path
 
@@ -318,9 +354,9 @@ class File:
             dst_path = func()
             o = Output(self.src_path, dst_path, self.src_name, module_type)
             self.outputs.append(o)
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
             self.failed = True
-            print(f"-- Failed: {module_type} {self.src_path}", file=sys.stderr)
+            print(f"-- Failed: {module_type} {self.src_path}\n{e}", file=sys.stderr)
 
 files = [File(f) for f in argv.file]
 
