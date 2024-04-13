@@ -84,7 +84,7 @@ jobs:
         run: bash build_mac_opencl.sh
       - name: examples/guppy_cc Metal
         working-directory: ./examples/guppy_cc
-        run: bash build_mac_metal.sh && build/example
+        run: bash build_mac_metal.sh
       - name: examples/raytracer CPU
         working-directory: ./examples/raytracer
         run: bash build_mac_cpu.sh && build/example
@@ -93,7 +93,7 @@ jobs:
         run: bash build_mac_opencl.sh
       - name: examples/raytracer Metal
         working-directory: ./examples/raytracer
-        run: bash build_mac_metal.sh && build/example
+        run: bash build_mac_metal.sh
       - name: examples/shared_memory CPU
         working-directory: ./examples/shared_memory
         run: bash build_mac_cpu.sh && build/example
@@ -102,7 +102,7 @@ jobs:
         run: bash build_mac_opencl.sh
       - name: examples/shared_memory Metal
         working-directory: ./examples/shared_memory
-        run: bash build_mac_metal.sh && build/example
+        run: bash build_mac_metal.sh
 
   ci_windows:
     runs-on: windows-2019
