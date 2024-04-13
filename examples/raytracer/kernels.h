@@ -44,14 +44,17 @@ gp_kernel(raytrace, 16, 16, 1, gp_args(
 
         Hit hit;
         hit.distance = 1000.0f;
-        hit.color = gp_float3(0.0f, 0.05f, 0.1f) * (ray.direction.y * 0.5f + 0.5f);
-
         for (uint32_t i = 0; i < sphere_count; i++) {
             intersect(&hit, &spheres[i], ray);
         }
 
-        gp_float3 light = rt_normalize(gp_float3(1.0f, 2.0f, -1.0f));
-        gp_float3 col = hit.color * (rt_dot(hit.normal, light) * 0.5f + 0.5f);
+        gp_float3 col;
+        if (hit.distance < 1000.0f) {
+            gp_float3 light = rt_normalize(gp_float3(1.0f, 2.0f, -1.0f));
+            col = hit.color * (rt_dot(hit.normal, light) * 0.5f + 0.5f);
+        } else {
+            col = gp_float3(0.0f, 0.05f, 0.1f) * (ray.direction.y * 0.5f + 0.5f);
+        }
         pixels[pixel.y * resolution.x + pixel.x] = col;
     }
 }
